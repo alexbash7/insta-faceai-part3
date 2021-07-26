@@ -167,7 +167,7 @@ const analyzeImagesWithAI = async (imageUrls) => {
 const readImagesFromS3 = async (userId, imageUrls) => {
     const imageDataList = [];
     imageUrls.forEach(async (imageUrl, i) => {
-        console.log(`Start reading ${imageUrl} to S3`);
+        console.log(`Start reading ${imageUrl} from S3`);
         const response = await axios({
             url: imageUrl,
             method: 'GET',
