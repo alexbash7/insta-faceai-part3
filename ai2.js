@@ -5,7 +5,6 @@ console.log(process.env);
 require('@tensorflow/tfjs-node');
 const util = require('util');
 const mysql = require('mysql');
-const dayjs = require('dayjs');
 const httpsProxyAgent = require('https-proxy-agent');
 let agent = new httpsProxyAgent('http://myspambox280:Y7u7TfI@185.252.27.34:65233');
 const faceapi = require('face-api.js');
@@ -30,7 +29,7 @@ const settings = {};
 
 const DB = {
     tableName: '',
-    imageLinks: {},
+    userInWork: null
 };
 
 // ===== Start Helper section =====
@@ -105,7 +104,6 @@ const getUser = async (query) => {
             return row[0].user_id;
         }
     }
-    console.log('No users to check');
 };
 
 const updateUser = async (query, userId, tableName) => {
@@ -166,20 +164,29 @@ const analyzeImagesWithAI = async (imageUrls) => {
 
 // ===== AWS section =====
 
-const uploadImagesToS3 = async (userId, imageUrls) => {
+const readImagesFromS3 = async (userId, imageUrls) => {
+    const imageDataList = [];
     imageUrls.forEach(async (imageUrl, i) => {
-        console.log(`Start uploading ${imageUrl} to S3`);
+        console.log(`Start reading ${imageUrl} from S3`);
         const response = await axios({
             url: imageUrl,
             method: 'GET',
-            responseType: 'stream'
+            responseType: 'arraybuffer'
         });
         const fileKey = `${userId}_${i}.jpg`;
-        console.log(fileKey);
+        imageDataList.push({ key: fileKey, body: response.data });
+    });
+
+    return imageDataList;
+};
+
+const uploadImagesToS3 = async (imageDataList) => {
+    imageDataList.forEach(async (dataObj) => {
+        console.log(`Start uploading ${imageUrl} to S3`);
         var params = {
             Bucket: process.env.BUCKET_NAME,
-            Key: fileKey,
-            Body: response.data
+            Key: dataObj.key,
+            Body: dataObj.body
         };
         await s3.upload(params).promise();
     });
@@ -188,31 +195,47 @@ const uploadImagesToS3 = async (userId, imageUrls) => {
 // ===== End AWS section =====
 
 const run = async () => {
-    console.log('Starting execution');
-    let connection = openDbConnection();
-    const query = util.promisify(connection.query).bind(connection);
-    const userId = await getUser(query);
-    console.log('UserID: ', userId);
-    const imageUrlList = prepareImageLinks(userId);
-    console.log('Unsorted Image URLs: ', imageUrlList);
-    await initAi();
-    const imageUrlSortedList = await analyzeImagesWithAI(imageUrlList);
-    console.log('Sorted Image URLs: ', imageUrlSortedList);
-    await uploadImagesToS3(userId, imageUrlSortedList);
-    await updateUser(query, userId, DB.tableName);
-    closeDbConnection(connection);
-    console.log('Execution complete');
-    
-    return true; // This will successfully resolve asyncInterval
+    try {
+        console.log('Starting execution');
+        let connection = openDbConnection();
+        const query = util.promisify(connection.query).bind(connection);
+        const userId = await getUser(query);
+        console.log('UserID: ', userId);
+        if (userId === undefined || userId === null) {
+            console.log('Stop execution, no users to check');
+            return true;
+        }
+        DB.userInWork = userId;
+        const imageUrlList = prepareImageLinks(userId);
+        console.log('Unsorted Image URLs: ', imageUrlList);
+        await initAi();
+        const imageUrlSortedList = await analyzeImagesWithAI(imageUrlList);
+        console.log('Sorted Image URLs: ', imageUrlSortedList);
+        const imagesDataList = await readImagesFromS3(userId, imageUrlSortedList);
+        await uploadImagesToS3(imagesDataList);
+        await updateUser(query, userId, DB.tableName);
+        closeDbConnection(connection);
+        DB.userInWork = null;
+        console.log('Execution complete');
+        
+        return true; // This will successfully resolve asyncInterval
+    } catch (err) {
+        console.log(JSON.stringify(err));
+        return false;
+    }
 }; 
 
 const start = async () => {
     try {
-        await asyncInterval(run, 500);
+        if (DB.userInWork !== null) {
+            console.log(`User with ID ${DB.userInWork} is still processing...`);
+            return true;
+        }
+        await asyncInterval(run, 3000);
     } catch (e) {
         console.log('error handling');
     }
     console.log("Done!");
 };
 
-start();
+setInterval(start, 5000);
