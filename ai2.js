@@ -104,7 +104,6 @@ const getUser = async (query) => {
             return row[0].user_id;
         }
     }
-    console.log('No users to check');
 };
 
 const updateUser = async (query, userId, tableName) => {
@@ -202,10 +201,6 @@ const run = async () => {
         const query = util.promisify(connection.query).bind(connection);
         const userId = await getUser(query);
         console.log('UserID: ', userId);
-        if (DB.userInWork !== null) {
-            console.log(`User with ID ${userId} is still processing...`);
-            return true;
-        }
         if (userId === undefined || userId === null) {
             console.log('Stop execution, no users to check');
             return true;
@@ -232,6 +227,10 @@ const run = async () => {
 
 const start = async () => {
     try {
+        if (DB.userInWork !== null) {
+            console.log(`User with ID ${DB.userInWork} is still processing...`);
+            return true;
+        }
         await asyncInterval(run, 3000);
     } catch (e) {
         console.log('error handling');
@@ -239,4 +238,4 @@ const start = async () => {
     console.log("Done!");
 };
 
-start();
+setInterval(start, 5000);
