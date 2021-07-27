@@ -211,13 +211,13 @@ const run = async () => {
             return true;
         }
         console.log('Starting execution');
-        let connection = openDbConnection();
-        const query = util.promisify(connection.query).bind(connection);
+        DB.connection = openDbConnection();
+        const query = util.promisify(DB.connection.query).bind(DB.connection);
         const userId = await getUser(query);
         console.log('UserID: ', userId);
         if (userId === undefined || userId === null) {
             console.log('Stop execution, no users to check');
-            closeDbConnection(connection);
+            closeDbConnection(DB.connection);
             return true;
         }
         DB.userInWork = userId;
@@ -231,7 +231,7 @@ const run = async () => {
         await uploadImagesToS3(DB.imageDataList);
         console.log(`After upload`);
         await updateUser(query, userId, DB.tableName);
-        await closeDbConnection(connection);
+        await closeDbConnection(DB.connection);
         DB.userInWork = null;
         DB.imageDataList = [];
         console.log('Execution complete');
@@ -239,7 +239,7 @@ const run = async () => {
         return true; // This will successfully resolve asyncInterval
     } catch (err) {
         console.log(JSON.stringify(err));
-        closeDbConnection(connection);
+        closeDbConnection(DB.connection);
         return false;
     }
 }; 
@@ -257,14 +257,14 @@ const start = async () => {
     console.log("Done!");
 };
 
-setInterval(start, 5000);
-// (async () => {
-//     let connection = openDbConnection();
-//     const query = util.promisify(connection.query).bind(connection);
-//     await resetUserTest(query, 3030, process.env.USER_TABLE_LIST);
-//     await closeDbConnection(connection);
-//     console.log(`Done`);
-// })();
+// setInterval(start, 5000);
+(async () => {
+    let connection = openDbConnection();
+    const query = util.promisify(connection.query).bind(connection);
+    await resetUserTest(query, 3030, process.env.USER_TABLE_LIST);
+    await closeDbConnection(connection);
+    console.log(`Done`);
+})();
 // (async () => {
 //  const imageList = [
 //     'https://s3.eu-central-1.wasabisys.com/instaloader/1115480170_0.jpg',
