@@ -29,6 +29,7 @@ const settings = {};
 
 const DB = {
     tableName: '',
+    connection: null,
     userInWork: null
 };
 
@@ -89,6 +90,7 @@ const closeDbConnection = async (connection) => {
             console.error('error disconnecting: ' + err.stack);
             return;
         }
+        DB.connection = null;
         console.log('DB disconnected');
     });
 };
@@ -203,6 +205,7 @@ const run = async () => {
         console.log('UserID: ', userId);
         if (userId === undefined || userId === null) {
             console.log('Stop execution, no users to check');
+            closeDbConnection(connection);
             return true;
         }
         DB.userInWork = userId;
@@ -221,6 +224,7 @@ const run = async () => {
         return true; // This will successfully resolve asyncInterval
     } catch (err) {
         console.log(JSON.stringify(err));
+        closeDbConnection(connection);
         return false;
     }
 }; 
