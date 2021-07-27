@@ -257,14 +257,14 @@ const start = async () => {
     console.log("Done!");
 };
 
-// setInterval(start, 5000);
-(async () => {
-    let connection = openDbConnection();
-    const query = util.promisify(connection.query).bind(connection);
-    await resetUserTest(query, 3030, process.env.USER_TABLE_LIST);
-    await closeDbConnection(connection);
-    console.log(`Done`);
-})();
+setInterval(start, 5000);
+// (async () => {
+//     let connection = openDbConnection();
+//     const query = util.promisify(connection.query).bind(connection);
+//     await resetUserTest(query, 3030, process.env.USER_TABLE_LIST);
+//     await closeDbConnection(connection);
+//     console.log(`Done`);
+// })();
 // (async () => {
 //  const imageList = [
 //     'https://s3.eu-central-1.wasabisys.com/instaloader/1115480170_0.jpg',
