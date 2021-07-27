@@ -30,10 +30,15 @@ const settings = {};
 const DB = {
     tableName: '',
     connection: null,
-    userInWork: null
+    userInWork: null,
+    imageDataList: []
 };
 
 // ===== Start Helper section =====
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 const prepareImageLinks = (userId) => {
     const urls = []
@@ -109,9 +114,15 @@ const getUser = async (query) => {
 };
 
 const updateUser = async (query, userId, tableName) => {
-    let sql = `UPDATE ${tableName} SET is_ai = 2 WHERE user_id = ${userId}`;
+    const sql = `UPDATE ${tableName} SET is_ai = 2 WHERE user_id = ${userId}`;
     await query(sql);
 };
+
+const resetUserTest = async (query, userId, tableName) => {
+    console.log(`Reset user test data`);
+    const sql = `UPDATE ${tableName} SET is_ai = 1 WHERE user_id > ${userId}`;
+    await query(sql)
+}
 
 // ===== End DB section ======
 
@@ -167,37 +178,38 @@ const analyzeImagesWithAI = async (imageUrls) => {
 // ===== AWS section =====
 
 const readImagesFromS3 = async (userId, imageUrls) => {
-    const imageDataList = [];
-    imageUrls.forEach(async (imageUrl, i) => {
-        console.log(`Start reading ${imageUrl} from S3`);
+    for await (const [i, url] of imageUrls.entries()) {
+        console.log(`Start reading ${url} from S3`);
         const response = await axios({
-            url: imageUrl,
+            url: url,
             method: 'GET',
             responseType: 'arraybuffer'
         });
         const fileKey = `${userId}_${i}.jpg`;
-        imageDataList.push({ key: fileKey, body: response.data });
-    });
-
-    return imageDataList;
+        const imageDataObj = { key: fileKey, body: response.data };
+        DB.imageDataList.push(imageDataObj);
+    }
 };
 
 const uploadImagesToS3 = async (imageDataList) => {
-    imageDataList.forEach(async (dataObj) => {
-        console.log(`Start uploading ${imageUrl} to S3`);
-        var params = {
+    for await (const dataObj of imageDataList) {
+        console.log(`Start uploading ${dataObj.key} to S3`);
+        const params = {
             Bucket: process.env.BUCKET_NAME,
             Key: dataObj.key,
             Body: dataObj.body
         };
         await s3.upload(params).promise();
-    });
+    }
 };
 
 // ===== End AWS section =====
 
 const run = async () => {
     try {
+        if (DB.userInWork !== null) {
+            return true;
+        }
         console.log('Starting execution');
         let connection = openDbConnection();
         const query = util.promisify(connection.query).bind(connection);
@@ -214,11 +226,14 @@ const run = async () => {
         await initAi();
         const imageUrlSortedList = await analyzeImagesWithAI(imageUrlList);
         console.log('Sorted Image URLs: ', imageUrlSortedList);
-        const imagesDataList = await readImagesFromS3(userId, imageUrlSortedList);
-        await uploadImagesToS3(imagesDataList);
+        await readImagesFromS3(userId, imageUrlSortedList);
+        console.log(`Before upload`)
+        await uploadImagesToS3(DB.imageDataList);
+        console.log(`After upload`);
         await updateUser(query, userId, DB.tableName);
-        closeDbConnection(connection);
+        await closeDbConnection(connection);
         DB.userInWork = null;
+        DB.imageDataList = [];
         console.log('Execution complete');
         
         return true; // This will successfully resolve asyncInterval
@@ -243,3 +258,32 @@ const start = async () => {
 };
 
 setInterval(start, 5000);
+// (async () => {
+//     let connection = openDbConnection();
+//     const query = util.promisify(connection.query).bind(connection);
+//     await resetUserTest(query, 3030, process.env.USER_TABLE_LIST);
+//     await closeDbConnection(connection);
+//     console.log(`Done`);
+// })();
+// (async () => {
+//  const imageList = [
+//     'https://s3.eu-central-1.wasabisys.com/instaloader/1115480170_0.jpg',
+//     'https://s3.eu-central-1.wasabisys.com/instaloader/1115480170_7.jpg',
+//     'https://s3.eu-central-1.wasabisys.com/instaloader/1115480170_8.jpg',
+//     'https://s3.eu-central-1.wasabisys.com/instaloader/1115480170_9.jpg',
+//     'https://s3.eu-central-1.wasabisys.com/instaloader/1115480170_10.jpg',
+//     'https://s3.eu-central-1.wasabisys.com/instaloader/1115480170_11.jpg',
+//     'https://s3.eu-central-1.wasabisys.com/instaloader/1115480170_5.jpg',
+//     'https://s3.eu-central-1.wasabisys.com/instaloader/1115480170_1.jpg',
+//     'https://s3.eu-central-1.wasabisys.com/instaloader/1115480170_3.jpg',
+//     'https://s3.eu-central-1.wasabisys.com/instaloader/1115480170_2.jpg',
+//     'https://s3.eu-central-1.wasabisys.com/instaloader/1115480170_4.jpg',
+//     'https://s3.eu-central-1.wasabisys.com/instaloader/1115480170_6.jpg'
+//   ];
+//   await readImagesFromS3(1115480170, imageList);
+//   console.log(`===read=====`);
+//   await sleep(5000);
+//   DB.imageDataList.forEach((v) => {
+//       console.log(`Key: ${v.key} and ${v.body.length}`);
+//   })
+// })()
