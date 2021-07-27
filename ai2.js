@@ -69,6 +69,7 @@ const asyncInterval = async (callback, ms, triesLeft = 5) => {
 // ===== End Helper section =====
 
 // ===== Start DB section =====
+
 const openDbConnection = () => {
     const connection = mysql.createConnection({
         host: '185.253.219.150',
@@ -141,36 +142,38 @@ const analyzeImagesWithAI = async (imageUrls) => {
     let unkonwnGenderDetections = [];
     let maleDetections = [];
     let multDetections = [];
-    try {
-        for (let i = 0; i < imageUrls.length; i++) {
-            console.log(`Start analyzing of image: ${imageUrls[i]}`);
-            const img = await loadImage(imageUrls[i]);
-            const detections = await faceapi.detectAllFaces(img).withAgeAndGender();
-
-            if (detections.length === 1) {
-               if (detections[0].gender === 'male') {
-                   maleDetections.push(imageUrls[i]);
-               } else if (detections[0].gender === 'female') {
-                   femaleDetections.push(imageUrls[i]);
-               } else {
-                   unkonwnGenderDetections.push(imageUrls[i]);
-               }
-            } else if (detections.length > 1) {
-                multDetections.push(imageUrls[i]);
-            } else {
-                zeroDetections.push(imageUrls[i]);
-            }
+    
+    for await (const imageUrl of imageUrls) {
+        console.log(`Start analyzing of image: ${imageUrl}`);
+        let img = null;
+        try {
+            img = await loadImage(imageUrl);
+        } catch (e) {
+            console.log(`Cannot load image for analysis`);
+            continue;
         }
-        
-        return femaleDetections
+        const detections = await faceapi.detectAllFaces(img).withAgeAndGender();
+
+        if (detections.length === 1) {
+            if (detections[0].gender === 'male') {
+                maleDetections.push(imageUrl);
+            } else if (detections[0].gender === 'female') {
+                femaleDetections.push(imageUrl);
+            } else {
+                unkonwnGenderDetections.push(imageUrl);
+            }
+        } else if (detections.length > 1) {
+            multDetections.push(imageUrl);
+        } else {
+            zeroDetections.push(imageUrl);
+        }
+    }
+    
+    return femaleDetections
         .concat(maleDetections)
         .concat(unkonwnGenderDetections)
         .concat(multDetections)
         .concat(zeroDetections);
-    } catch (error) {
-        console.log(imageUrl);
-        console.log(JSON.stringify(error));
-    }
 };
 
 // ===== End AI section =====
@@ -180,14 +183,18 @@ const analyzeImagesWithAI = async (imageUrls) => {
 const readImagesFromS3 = async (userId, imageUrls) => {
     for await (const [i, url] of imageUrls.entries()) {
         console.log(`Start reading ${url} from S3`);
-        const response = await axios({
-            url: url,
-            method: 'GET',
-            responseType: 'arraybuffer'
-        });
         const fileKey = `${userId}_${i}.jpg`;
-        const imageDataObj = { key: fileKey, body: response.data };
-        DB.imageDataList.push(imageDataObj);
+        try {
+            const response = await axios({
+                url: url,
+                method: 'GET',
+                responseType: 'arraybuffer'
+            });            
+            const imageDataObj = { key: fileKey, body: response.data };
+            DB.imageDataList.push(imageDataObj);
+        } catch (err) {
+            console.log(`File ${fileKey} doesn't exist. Continue execution`);
+        }
     }
 };
 
@@ -240,6 +247,7 @@ const run = async () => {
     } catch (err) {
         console.log(JSON.stringify(err));
         closeDbConnection(DB.connection);
+        DB.userInWork = null;
         return false;
     }
 }; 
