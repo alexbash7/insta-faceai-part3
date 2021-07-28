@@ -105,7 +105,7 @@ const getUser = async (query) => {
     const userTables = process.env.USER_TABLE_LIST.split(',');
     for (let i = 0; i < userTables.length; i++) {
         let tableName = userTables[i];
-        let sql = `SELECT user_id FROM ${tableName} WHERE is_ai = 1 AND s3_address = 'instaloader' ORDER BY ID desc LIMIT 1`;
+        let sql = `SELECT user_id FROM ${tableName} WHERE is_ai = 1 AND s3_address = 'instaloader' ORDER BY ID asc LIMIT 1`;
         let row = await query(sql);
         if (row.length > 0) {
             DB.tableName = tableName;
