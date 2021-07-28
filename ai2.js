@@ -230,7 +230,7 @@ const run = async () => {
         DB.userInWork = userId;
         const imageUrlList = prepareImageLinks(userId);
         console.log('Unsorted Image URLs: ', imageUrlList);
-        await initAi();
+
         const imageUrlSortedList = await analyzeImagesWithAI(imageUrlList);
         console.log('Sorted Image URLs: ', imageUrlSortedList);
         await readImagesFromS3(userId, imageUrlSortedList);
@@ -264,6 +264,8 @@ const start = async () => {
     }
     console.log("Done!");
 };
+
+initAi();
 
 setInterval(start, 5000);
 // (async () => {
